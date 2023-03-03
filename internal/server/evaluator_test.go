@@ -2249,6 +2249,16 @@ func Test_matchesDateTime(t *testing.T) {
 			wantMatch: true,
 		},
 		{
+			name: "eq date only",
+			constraint: storage.EvaluationConstraint{
+				Property: "foo",
+				Operator: "eq",
+				Value:    "2006-01-02",
+			},
+			value:     "2006-01-02",
+			wantMatch: true,
+		},
+		{
 			name: "negative eq",
 			constraint: storage.EvaluationConstraint{
 				Property: "foo",
@@ -2275,6 +2285,15 @@ func Test_matchesDateTime(t *testing.T) {
 				Value:    "2006-01-02T15:04:05Z",
 			},
 			value: "2006-01-02T15:04:05Z",
+		},
+		{
+			name: "negative neq date only",
+			constraint: storage.EvaluationConstraint{
+				Property: "foo",
+				Operator: "neq",
+				Value:    "2006-01-02",
+			},
+			value: "2006-01-02",
 		},
 		{
 			name: "lt",

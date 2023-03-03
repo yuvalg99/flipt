@@ -426,15 +426,15 @@ func matchesDateTime(c storage.EvaluationConstraint, v string) (bool, error) {
 		return false, nil
 	}
 
-	d, err := time.Parse(time.RFC3339, v)
+	d, err := tryParseDateTime(v)
 	if err != nil {
-		return false, errs.ErrInvalidf("parsing datetime from %q", v)
+		return false, err
 	}
 
 	// TODO: we should consider parsing this at creation time since it doesn't change and it doesnt make sense to allow invalid constraint values
-	value, err := time.Parse(time.RFC3339, c.Value)
+	value, err := tryParseDateTime(c.Value)
 	if err != nil {
-		return false, errs.ErrInvalidf("parsing datetime from %q", c.Value)
+		return false, err
 	}
 
 	switch c.Operator {
@@ -453,4 +453,16 @@ func matchesDateTime(c storage.EvaluationConstraint, v string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func tryParseDateTime(v string) (time.Time, error) {
+	if d, err := time.Parse(time.RFC3339, v); err == nil {
+		return d, nil
+	}
+
+	if d, err := time.Parse(time.DateOnly, v); err == nil {
+		return d, nil
+	}
+
+	return time.Time{}, errs.ErrInvalidf("parsing datetime from %q", v)
 }
