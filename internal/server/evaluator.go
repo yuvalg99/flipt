@@ -176,6 +176,8 @@ func (s *Server) evaluate(ctx context.Context, r *flipt.EvaluationRequest) (resp
 				match, err = matchesNumber(c, v)
 			case flipt.ComparisonType_BOOLEAN_COMPARISON_TYPE:
 				match, err = matchesBool(c, v)
+			case flipt.ComparisonType_DATETIME_COMPARISON_TYPE:
+				match, err = matchesDateTime(c, v)
 			default:
 				resp.Reason = flipt.EvaluationReason_ERROR_EVALUATION_REASON
 				return resp, errs.ErrInvalid("unknown constraint type")
@@ -406,6 +408,48 @@ func matchesBool(c storage.EvaluationConstraint, v string) (bool, error) {
 		return value, nil
 	case flipt.OpFalse:
 		return !value, nil
+	}
+
+	return false, nil
+}
+
+func matchesDateTime(c storage.EvaluationConstraint, v string) (bool, error) {
+	switch c.Operator {
+	case flipt.OpNotPresent:
+		return len(strings.TrimSpace(v)) == 0, nil
+	case flipt.OpPresent:
+		return len(strings.TrimSpace(v)) != 0, nil
+	}
+
+	// can't parse an empty string
+	if v == "" {
+		return false, nil
+	}
+
+	d, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return false, errs.ErrInvalidf("parsing datetime from %q", v)
+	}
+
+	// TODO: we should consider parsing this at creation time since it doesn't change and it doesnt make sense to allow invalid constraint values
+	value, err := time.Parse(time.RFC3339, c.Value)
+	if err != nil {
+		return false, errs.ErrInvalidf("parsing datetime from %q", c.Value)
+	}
+
+	switch c.Operator {
+	case flipt.OpEQ:
+		return value.Equal(d), nil
+	case flipt.OpNEQ:
+		return !value.Equal(d), nil
+	case flipt.OpLT:
+		return d.Before(value), nil
+	case flipt.OpLTE:
+		return d.Before(value) || value.Equal(d), nil
+	case flipt.OpGT:
+		return d.After(value), nil
+	case flipt.OpGTE:
+		return d.After(value) || value.Equal(d), nil
 	}
 
 	return false, nil
