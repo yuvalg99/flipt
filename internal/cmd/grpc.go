@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	fliptotel "go.flipt.io/flipt/internal/server/otel"
 	"go.flipt.io/flipt/internal/storage"
 	authsql "go.flipt.io/flipt/internal/storage/auth/sql"
+	"go.flipt.io/flipt/internal/storage/filesystem"
 	oplocksql "go.flipt.io/flipt/internal/storage/oplock/sql"
 	"go.flipt.io/flipt/internal/storage/sql"
 	"go.flipt.io/flipt/internal/storage/sql/mysql"
@@ -272,6 +274,9 @@ func NewGRPCServer(
 
 		grpcOpts = append(grpcOpts, grpc.Creds(creds))
 	}
+
+	// TODO(georgemac): HACK: experimenting with fs.FS based storeage
+	store = filesystem.NewStore(os.DirFS("."))
 
 	// initialize server
 	register.Add(fliptserver.New(logger, store))
