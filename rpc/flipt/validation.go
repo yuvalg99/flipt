@@ -388,6 +388,10 @@ func (req *CreateConstraintRequest) Validate() error {
 		if _, ok := BooleanOperators[operator]; !ok {
 			return errors.ErrInvalidf("constraint operator %q is not valid for type boolean", req.Operator)
 		}
+	case ComparisonType_DATETIME_COMPARISON_TYPE:
+		if _, ok := NumberOperators[operator]; !ok {
+			return errors.ErrInvalidf("constraint operator %q is not valid for type datetime", req.Operator)
+		}
 	default:
 		return errors.ErrInvalidf("invalid constraint type: %q", req.Type.String())
 	}
