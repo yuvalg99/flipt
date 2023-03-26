@@ -6,13 +6,14 @@ import (
 	bytes "bytes"
 	context "context"
 	fmt "fmt"
+	io "io"
+	http "net/http"
+	url "net/url"
+
 	flipt "go.flipt.io/flipt/rpc/flipt"
 	grpc "google.golang.org/grpc"
 	protojson "google.golang.org/protobuf/encoding/protojson"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	io "io"
-	http "net/http"
-	url "net/url"
 )
 
 type FliptClient struct {

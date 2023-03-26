@@ -6,15 +6,16 @@ import (
 	bytes "bytes"
 	context "context"
 	fmt "fmt"
+	io "io"
+	http "net/http"
+	url "net/url"
+	strconv "strconv"
+
 	auth "go.flipt.io/flipt/rpc/flipt/auth"
 	_go "go.flipt.io/flipt/sdk/go"
 	grpc "google.golang.org/grpc"
 	protojson "google.golang.org/protobuf/encoding/protojson"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	io "io"
-	http "net/http"
-	url "net/url"
-	strconv "strconv"
 )
 
 type authClient struct {

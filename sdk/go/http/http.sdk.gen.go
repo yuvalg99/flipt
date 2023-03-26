@@ -3,12 +3,13 @@
 package http
 
 import (
+	http "net/http"
+
 	_go "go.flipt.io/flipt/sdk/go"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	metadata "google.golang.org/grpc/metadata"
 	status1 "google.golang.org/grpc/status"
 	protojson "google.golang.org/protobuf/encoding/protojson"
-	http "net/http"
 )
 
 var _ _go.Transport = Transport{}

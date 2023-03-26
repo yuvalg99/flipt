@@ -4,6 +4,7 @@ package sdk
 
 import (
 	context "context"
+
 	flipt "go.flipt.io/flipt/rpc/flipt"
 )
 

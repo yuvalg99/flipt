@@ -4,13 +4,14 @@ package http
 
 import (
 	context "context"
+	io "io"
+	http "net/http"
+	url "net/url"
+
 	meta "go.flipt.io/flipt/rpc/flipt/meta"
 	httpbody "google.golang.org/genproto/googleapis/api/httpbody"
 	grpc "google.golang.org/grpc"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	io "io"
-	http "net/http"
-	url "net/url"
 )
 
 type MetadataServiceClient struct {
