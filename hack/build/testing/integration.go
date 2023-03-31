@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"dagger.io/dagger"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/yaml.v2"
 )
 
 var (
 	protocolPorts = map[string]string{"http": "8080", "grpc": "9000"}
 	replacer      = strings.NewReplacer(" ", "-", "/", "-")
-	sema          = make(chan struct{}, 6)
 )
 
 type testConfig struct {
@@ -28,8 +29,22 @@ type testConfig struct {
 	token     string
 }
 
-func Integration(ctx context.Context, client *dagger.Client, base, flipt *dagger.Container) error {
-	logs := client.CacheVolume(fmt.Sprintf("logs-%s", uuid.New()))
+type IntegrationRequest struct {
+	Base  *dagger.Container
+	Flipt *dagger.Container
+	Cover *dagger.CacheVolume
+}
+
+func Integration(ctx context.Context, client *dagger.Client, req IntegrationRequest) error {
+	var (
+		base  = req.Base
+		flipt = req.Flipt
+		cover = req.Cover
+
+		// unique volumes per invocation
+		logs = client.CacheVolume(fmt.Sprintf("logs-%s", uuid.New()))
+	)
+
 	_, err := flipt.WithUser("root").
 		WithMountedCache("/logs", logs).
 		WithExec([]string{"chown", "flipt:flipt", "/logs"}).
@@ -48,12 +63,12 @@ func Integration(ctx context.Context, client *dagger.Client, base, flipt *dagger
 			address := fmt.Sprintf("%s://flipt:%s", protocol, port)
 			cases = append(cases,
 				testConfig{
-					name:      fmt.Sprintf("%s namespace %s no authentication", strings.ToUpper(protocol), namespace),
+					name:      fmt.Sprintf("%s namespace %v no authentication", strings.ToUpper(protocol), namespace != ""),
 					namespace: namespace,
 					address:   address,
 				},
 				testConfig{
-					name:      fmt.Sprintf("%s namespace %s with authentication", strings.ToUpper(protocol), namespace),
+					name:      fmt.Sprintf("%s namespace %v with authentication", strings.ToUpper(protocol), namespace != ""),
 					namespace: namespace,
 					address:   address,
 					token:     "some-token",
@@ -68,7 +83,7 @@ func Integration(ctx context.Context, client *dagger.Client, base, flipt *dagger
 
 	for _, test := range []struct {
 		name string
-		fn   func(_ context.Context, base, flipt *dagger.Container, conf testConfig) func() error
+		fn   func(_ context.Context, base, flipt *dagger.Container, cover *dagger.CacheVolume, conf testConfig) func() error
 	}{
 		{
 			name: "api",
@@ -90,48 +105,51 @@ func Integration(ctx context.Context, client *dagger.Client, base, flipt *dagger
 					WithEnvVariable("FLIPT_AUTHENTICATION_METHODS_TOKEN_BOOTSTRAP_TOKEN", config.token)
 			}
 
-			name := strings.ToLower(replacer.Replace(fmt.Sprintf("flipt-test-%s-config-%s", test.name, config.name)))
+			var (
+				name      = strings.ToLower(replacer.Replace(fmt.Sprintf("flipt-test-%s-config-%s", test.name, config.name)))
+				logPath   = fmt.Sprintf("/var/opt/flipt/logs/%s.log", name)
+				coverPath = path.Join("/var/opt/flipt/cover", name)
+			)
+
 			flipt = flipt.
 				WithEnvVariable("FLIPT_LOG_LEVEL", "debug").
-				WithEnvVariable("FLIPT_LOG_FILE", fmt.Sprintf("/var/opt/flipt/logs/%s.log", name)).
-				WithMountedCache("/var/opt/flipt/logs", logs)
+				WithEnvVariable("FLIPT_LOG_FILE", logPath).
+				WithEnvVariable("GOCOVERDIR", coverPath).
+				WithMountedCache("/var/opt/flipt/logs", logs).
+				WithMountedCache("/var/opt/flipt/cover", cover).
+				WithExec([]string{"mkdir", coverPath})
 
-			g.Go(take(test.fn(ctx, base, flipt, config)))
+			_, err := flipt.ExitCode(ctx)
+			if err != nil {
+				return err
+			}
+
+			g.Go(test.fn(ctx, base, flipt, cover, config))
 		}
 	}
 
 	err = g.Wait()
 
-	if _, lerr := client.Container().From("alpine:3.16").
+	logsCopy := client.Container().From("alpine:3.16").
 		WithMountedCache("/logs", logs).
-		WithExec([]string{"cp", "-r", "/logs", "/out"}).
-		Directory("/out").Export(ctx, "hack/build/logs"); lerr != nil {
-		log.Println("Error copying logs", lerr)
+		WithExec([]string{"cp", "-r", "/logs", "/logs-out"})
+
+	if _, lerr := logsCopy.Directory("/logs-out").Export(ctx, "hack/build/logs"); lerr != nil {
+		log.Println("error copying logs", lerr)
 	}
 
 	return err
 }
 
-func take(fn func() error) func() error {
-	return func() error {
-		// insert into semaphore channel to maintain
-		// a max concurrency
-		sema <- struct{}{}
-		defer func() { <-sema }()
-
-		return fn()
-	}
-}
-
-func api(ctx context.Context, base, flipt *dagger.Container, conf testConfig) func() error {
+func api(ctx context.Context, base, flipt *dagger.Container, cover *dagger.CacheVolume, conf testConfig) func() error {
 	return suite(ctx, "api", base,
 		// create unique instance for test case
 		flipt.
 			WithEnvVariable("UNIQUE", uuid.New().String()).
-			WithExec(nil), conf)
+			WithExec(nil), cover, conf)
 }
 
-func importExport(ctx context.Context, base, flipt *dagger.Container, conf testConfig) func() error {
+func importExport(ctx context.Context, base, flipt *dagger.Container, cover *dagger.CacheVolume, conf testConfig) func() error {
 	return func() error {
 		// import testdata before running readonly suite
 		flags := []string{"--address", conf.address}
@@ -154,46 +172,53 @@ func importExport(ctx context.Context, base, flipt *dagger.Container, conf testC
 		)
 		// use target flipt binary to invoke import
 		_, err := flipt.
-			WithEnvVariable("UNIQUE", uuid.New().String()).
 			// copy testdata import yaml from base
 			WithFile("import.yaml", seed).
 			WithServiceBinding("flipt", fliptToTest).
+			WithEnvVariable("UNIQUE", uuid.New().String()).
 			// it appears it takes a little while for Flipt to come online
 			// For the go tests they have to compile and that seems to be enough
 			// time for the target Flipt to come up.
 			// However, in this case the flipt binary is prebuilt and needs a little sleep.
-			WithExec([]string{"sh", "-c", fmt.Sprintf("sleep 2 && %s", strings.Join(importCmd, " "))}).
+			WithExec([]string{"sh", "-c", fmt.Sprintf("sleep 4 && %s", strings.Join(importCmd, " "))}).
 			ExitCode(ctx)
 		if err != nil {
 			return err
 		}
 
 		// run readonly suite against imported Flipt instance
-		if err := suite(ctx, "readonly", base, fliptToTest, conf)(); err != nil {
+		if err := suite(ctx, "readonly", base, fliptToTest, cover, conf)(); err != nil {
 			return err
 		}
 
-		expected, err := seed.Contents(ctx)
+		expectedYAML, err := seed.Contents(ctx)
 		if err != nil {
 			return err
 		}
 
+		exportPath := "/var/opt/flipt/export.yaml"
 		// use target flipt binary to invoke import
-		generated, err := flipt.
-			WithEnvVariable("UNIQUE", uuid.New().String()).
+		exportedYAML, err := flipt.
 			WithServiceBinding("flipt", fliptToTest).
-			WithExec(append([]string{"/bin/flipt", "export"}, flags...)).
-			Stdout(ctx)
+			WithEnvVariable("UNIQUE", uuid.New().String()).
+			WithExec(append([]string{"/bin/flipt", "export", "-o", exportPath}, flags...)).
+			File(exportPath).
+			Contents(ctx)
 		if err != nil {
 			return err
 		}
 
-		if expected != generated {
-			fmt.Println("Unexpected difference in exported output:")
-			fmt.Println("Expected:")
-			fmt.Println(expected + "\n")
-			fmt.Println("Found:")
-			fmt.Println(generated)
+		var expected, exported map[string]interface{}
+		if err := yaml.Unmarshal([]byte(expectedYAML), &expected); err != nil {
+			return err
+		}
+
+		if err := yaml.Unmarshal([]byte(exportedYAML), &exported); err != nil {
+			return err
+		}
+
+		if diff := cmp.Diff(expected, exported); diff != "" {
+			fmt.Println("(-expected/+found):\n", diff)
 
 			return errors.New("Exported yaml did not match.")
 		}
@@ -202,7 +227,7 @@ func importExport(ctx context.Context, base, flipt *dagger.Container, conf testC
 	}
 }
 
-func suite(ctx context.Context, dir string, base, flipt *dagger.Container, conf testConfig) func() error {
+func suite(ctx context.Context, dir string, base, flipt *dagger.Container, cover *dagger.CacheVolume, conf testConfig) func() error {
 	return func() error {
 		flags := []string{"--flipt-addr", conf.address}
 		if conf.namespace != "" {
@@ -213,11 +238,27 @@ func suite(ctx context.Context, dir string, base, flipt *dagger.Container, conf 
 			flags = append(flags, "--flipt-token", conf.token)
 		}
 
+		testCoverName := fmt.Sprintf("go-test-%s-config-%s", dir, conf.name)
+		testCoverDir := path.Join("/cover", strings.ToLower(replacer.Replace(testCoverName)))
+
+		testCmd := strings.Join(append([]string{
+			"go", "test",
+			"-cover", "-covermode", "atomic",
+			"-coverpkg", "go.flipt.io/flipt/sdk/go,go.flipt.io/flipt/sdk/go/http,go.flipt.io/flipt/sdk/go/grpc",
+			"-v", "-race", "."},
+			append(flags, "-test.gocoverdir", testCoverDir)...), " ")
+
 		_, err := base.
-			WithServiceBinding("flipt", flipt).
+			WithMountedCache("/cover", cover).
+			WithExec([]string{"mkdir", testCoverDir}).
 			WithWorkdir(path.Join("hack/build/testing/integration", dir)).
-			WithEnvVariable("UNIQUE", uuid.New().String()).
-			WithExec(append([]string{"go", "test", "-v", "-race"}, append(flags, ".")...)).
+			WithServiceBinding("flipt", flipt).
+			WithExec([]string{"sh", "-xc", testCmd}).
+			// Dagger actually terminates service bound containers using SIGKILL which
+			// leads to Go not automatically writing out coverage data on exit.
+			// Instead we mount an endpoint on Flipt when coverage is enabled which
+			// we trigger before exiting the foreground container.
+			WithExec([]string{"sh", "-c", "wget -O - http://flipt:8080/cover || echo failed to cover"}).
 			ExitCode(ctx)
 
 		return err

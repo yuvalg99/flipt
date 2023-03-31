@@ -12,6 +12,7 @@ import (
 	"dagger.io/dagger"
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
+	"go.flipt.io/flipt/build/coverage"
 	"go.flipt.io/flipt/build/internal"
 	"go.flipt.io/flipt/build/internal/publish"
 	"go.flipt.io/flipt/build/release"
@@ -109,14 +110,68 @@ type Test mg.Namespace
 func (t Test) All(ctx context.Context) error {
 	var g errgroup.Group
 
+	client, err := daggerClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer client.Close()
+
+	platform, err := client.DefaultPlatform(ctx)
+	if err != nil {
+		return err
+	}
+
+	req, err := newRequest(ctx, client, platform)
+	if err != nil {
+		return err
+	}
+
+	base, err := internal.Base(ctx, client, req)
+	if err != nil {
+		return err
+	}
+
+	flipt, err := internal.Package(ctx, client, base, req)
+	if err != nil {
+		return err
+	}
+
+	cover, export, err := coverVolume(ctx, client, flipt)
+	if err != nil {
+		return err
+	}
+
 	for db := range testing.All {
 		db := db
 		g.Go(func() error {
-			return t.Database(ctx, db)
+			return testing.Unit(testing.All[db](
+				testing.WithCoverage(fmt.Sprintf("go-test-unit-%s", db), cover)(ctx, client, base),
+			))
 		})
 	}
 
-	return g.Wait()
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	integrationRequest := testing.IntegrationRequest{
+		Base:  base,
+		Flipt: flipt,
+		Cover: cover,
+	}
+
+	g.Go(func() error {
+		return testing.Integration(ctx, client, integrationRequest)
+	})
+
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	// export coverage if configured to do so
+	return export()
+
 }
 
 // Unit runs the base suite of tests for all of Flipt.
@@ -205,7 +260,23 @@ func (t Test) Integration(ctx context.Context) error {
 		return err
 	}
 
-	return testing.Integration(ctx, client, base, flipt)
+	cover, export, err := coverVolume(ctx, client, flipt)
+	if err != nil {
+		return err
+	}
+
+	integrationRequest := testing.IntegrationRequest{
+		Base:  base,
+		Flipt: flipt,
+		Cover: cover,
+	}
+
+	if err := testing.Integration(ctx, client, integrationRequest); err != nil {
+		return err
+	}
+
+	// export coverage if configured to do so
+	return export()
 }
 
 type Release mg.Namespace
@@ -236,6 +307,14 @@ func newRequest(ctx context.Context, client *dagger.Client, platform dagger.Plat
 	dist := ui.Directory("./dist")
 
 	return internal.NewFliptRequest(dist, platform, internal.WithWorkDir(workDir())), nil
+}
+
+func coverVolume(ctx context.Context, client *dagger.Client, flipt *dagger.Container) (*dagger.CacheVolume, func() error, error) {
+	if dir := os.Getenv("GOCOVERDIR"); dir != "" {
+		return coverage.NewVolume(ctx, client, flipt, dir)
+	}
+
+	return client.CacheVolume("cover-dir"), func() error { return nil }, nil
 }
 
 func uiRepositoryPath() string {

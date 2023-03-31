@@ -64,7 +64,7 @@ func Base(ctx context.Context, client *dagger.Client, req FliptRequest) (*dagger
 	golang := client.Container(dagger.ContainerOpts{
 		Platform: dagger.Platform(platforms.Format(req.BuildTarget)),
 	}).
-		From("golang:1.20-alpine3.16").
+		From("golang:1.20.1-alpine3.16").
 		WithEnvVariable("GOCACHE", goBuildCachePath).
 		WithEnvVariable("GOMODCACHE", goModCachePath).
 		WithExec([]string{"apk", "add", "bash", "gcc", "binutils-gold", "build-base", "git"})
@@ -110,8 +110,8 @@ func Base(ctx context.Context, client *dagger.Client, req FliptRequest) (*dagger
 	sum := fmt.Sprintf("%x", sha256.Sum256([]byte(contents)))
 
 	var (
-		cacheGoBuild = client.CacheVolume(fmt.Sprintf("go-build-%s", sum))
-		cacheGoMod   = client.CacheVolume(fmt.Sprintf("go-mod-%s", sum))
+		cacheGoBuild = client.CacheVolume(fmt.Sprintf("go-build-cache-%s", sum))
+		cacheGoMod   = client.CacheVolume(fmt.Sprintf("go-mod-cache-%s", sum))
 	)
 
 	golang = golang.WithEnvVariable("GOOS", req.Target.OS).
@@ -166,7 +166,7 @@ func Base(ctx context.Context, client *dagger.Client, req FliptRequest) (*dagger
 	var (
 		ldflags    = "-s -w -linkmode external -extldflags -static"
 		goBuildCmd = fmt.Sprintf(
-			"go build -trimpath -tags assets,netgo -o %s -ldflags='%s' ./...",
+			"go build -cover -covermode atomic -trimpath -tags assets,netgo -o %s -ldflags='%s' ./...",
 			req.binary(),
 			ldflags,
 		)

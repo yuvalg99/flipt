@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"os"
+	"runtime/coverage"
+	"strings"
 	"time"
 
 	"github.com/fatih/color"
@@ -26,6 +29,18 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
+
+// coverEnabled signifies whether or not Flipt was built with "-cover".
+var coverEnabled bool
+
+func init() {
+	if err := coverage.ClearCounters(); err != nil {
+		coverEnabled = !strings.Contains(err.Error(), "program not built with -cover")
+		return
+	}
+
+	coverEnabled = true
+}
 
 // HTTPServer is a wrapper around the construction and registration of Flipt's HTTP server.
 type HTTPServer struct {
@@ -104,6 +119,17 @@ func NewHTTPServer(
 	r.Use(middleware.Recoverer)
 	r.Mount("/debug", middleware.Profiler())
 	r.Mount("/metrics", promhttp.Handler())
+
+	if coverEnabled {
+		r.HandleFunc("/cover", func(w http.ResponseWriter, r *http.Request) {
+			if dir := os.Getenv("GOCOVERDIR"); dir != "" {
+				logger.Debug("writing coverage data", zap.String("coverdir", dir))
+				if err := coverage.WriteCountersDir(dir); err != nil {
+					logger.Error("failed to write cover data", zap.Error(err))
+				}
+			}
+		})
+	}
 
 	r.Group(func(r chi.Router) {
 		if key := cfg.Authentication.Session.CSRF.Key; key != "" {
