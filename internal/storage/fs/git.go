@@ -39,12 +39,18 @@ type GitStoreConfig struct {
 	ref plumbing.ReferenceName
 }
 
+func WithUpstreamRef(ref string) containers.Option[GitStoreConfig] {
+	return func(c *GitStoreConfig) {
+		c.ref = plumbing.NewRemoteReferenceName("origin", ref)
+	}
+}
+
 func NewGitStoreConfig(url string, opts ...containers.Option[GitStoreConfig]) GitStoreConfig {
 	c := GitStoreConfig{
 		url: url,
 		ref: plumbing.NewRemoteReferenceName("origin", "main"),
 	}
-	containers.ApplyAll(&c)
+	containers.ApplyAll(&c, opts...)
 	return c
 }
 

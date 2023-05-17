@@ -20,6 +20,7 @@ type StorageConfig struct {
 	} `json:"local,omitempty" mapstructure:"local"`
 	Git struct {
 		Repository string `json:"repository,omitempty" mapstructure:"repository"`
+		Ref        string `json:"ref,omitempty" mapstructure:"ref"`
 	} `json:"git,omitempty" mapstructure:"git"`
 }
 
@@ -30,6 +31,7 @@ func (c *StorageConfig) setDefaults(v *viper.Viper) {
 	case string(LocalStorageType):
 		v.SetDefault("local", map[string]any{
 			"path": ".",
+			"ref":  "main",
 		})
 	}
 }

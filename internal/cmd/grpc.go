@@ -89,6 +89,7 @@ func NewGRPCServer(
 	logger *zap.Logger,
 	cfg *config.Config,
 	info info.Flipt,
+	forceMigrate bool,
 ) (*GRPCServer, error) {
 	logger = logger.With(zap.String("server", "grpc"))
 	server := &GRPCServer{
@@ -109,7 +110,7 @@ func NewGRPCServer(
 	var store storage.Store
 	switch cfg.Storage.Type {
 	case config.DatabaseStorageType:
-		db, driver, shutdown, err := getDB(ctx, logger, cfg)
+		db, driver, shutdown, err := getDB(ctx, logger, cfg, forceMigrate)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +136,10 @@ func NewGRPCServer(
 		}
 	case config.GitStorageType:
 		store, err = storefs.NewGitStore(logger,
-			storefs.NewGitStoreConfig(cfg.Storage.Git.Repository))
+			storefs.NewGitStoreConfig(
+				cfg.Storage.Git.Repository,
+				storefs.WithUpstreamRef(cfg.Storage.Git.Ref),
+			))
 		if err != nil {
 			return nil, fmt.Errorf("opening git store: %w", err)
 		}
@@ -196,6 +200,7 @@ func NewGRPCServer(
 		logger,
 		cfg,
 		auditLoggingEnabled,
+		forceMigrate,
 	)
 	if err != nil {
 		return nil, err
@@ -369,9 +374,22 @@ var (
 	dbErr  error
 )
 
-func getDB(ctx context.Context, logger *zap.Logger, cfg *config.Config) (*sql.DB, fliptsql.Driver, errFunc, error) {
+func getDB(ctx context.Context, logger *zap.Logger, cfg *config.Config, forceMigrate bool) (*sql.DB, fliptsql.Driver, errFunc, error) {
 	once.Do(func() {
-		var err error
+		migrator, err := fliptsql.NewMigrator(*cfg, logger)
+		if err != nil {
+			dbErr = err
+			return
+		}
+
+		if err := migrator.Up(forceMigrate); err != nil {
+			migrator.Close()
+			dbErr = err
+			return
+		}
+
+		migrator.Close()
+
 		db, driver, err = fliptsql.Open(*cfg)
 		if err != nil {
 			dbErr = fmt.Errorf("opening db: %w", err)

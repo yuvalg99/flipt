@@ -30,8 +30,9 @@ func authenticationGRPC(
 	logger *zap.Logger,
 	cfg *config.Config,
 	auditLoggingEnabled bool,
+	forceMigrate bool,
 ) (grpcRegisterers, []grpc.UnaryServerInterceptor, func(context.Context) error, error) {
-	db, driver, shutdown, err := getDB(ctx, logger, cfg)
+	db, driver, shutdown, err := getDB(ctx, logger, cfg, forceMigrate)
 	if err != nil {
 		return nil, nil, shutdown, err
 	}
