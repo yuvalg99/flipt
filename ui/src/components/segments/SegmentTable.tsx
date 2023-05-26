@@ -17,7 +17,7 @@ import Pagination from '~/components/Pagination';
 import Searchbox from '~/components/Searchbox';
 import { useTimezone } from '~/data/hooks/timezone';
 import { INamespace } from '~/types/Namespace';
-import { ISegment, SegmentMatchType } from '~/types/Segment';
+import { ISegment, toSegmentMatchType } from '~/types/Segment';
 import { truncateKey } from '~/utils/helpers';
 
 type SegmentTableProps = {
@@ -66,10 +66,7 @@ export default function SegmentTable(props: SegmentTableProps) {
     }),
     columnHelper.accessor('matchType', {
       header: 'Match Type',
-      cell: (info) =>
-        SegmentMatchType[
-          info.getValue() as unknown as keyof typeof SegmentMatchType
-        ],
+      cell: (info) => toSegmentMatchType(info.getValue()),
       meta: {
         className: 'whitespace-nowrap py-4 px-3 text-sm'
       }

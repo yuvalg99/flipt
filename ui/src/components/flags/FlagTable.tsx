@@ -16,7 +16,7 @@ import { Link } from 'react-router-dom';
 import Pagination from '~/components/Pagination';
 import Searchbox from '~/components/Searchbox';
 import { useTimezone } from '~/data/hooks/timezone';
-import { IFlag } from '~/types/Flag';
+import { IFlag, toFlagType } from '~/types/Flag';
 import { INamespace } from '~/types/Namespace';
 import { truncateKey } from '~/utils/helpers';
 
@@ -55,6 +55,13 @@ export default function FlagTable(props: FlagTableProps) {
       meta: {
         className:
           'truncate whitespace-nowrap py-4 px-3 text-sm font-medium text-gray-900'
+      }
+    }),
+    columnHelper.accessor('type', {
+      header: 'Type',
+      cell: (info) => toFlagType(info.getValue()),
+      meta: {
+        className: 'truncate whitespace-nowrap py-4 px-3 text-sm text-gray-500'
       }
     }),
     columnHelper.accessor('name', {
