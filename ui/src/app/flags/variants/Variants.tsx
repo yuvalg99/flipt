@@ -3,14 +3,14 @@ import { useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import DeletePanel from '~/components/DeletePanel';
 import EmptyState from '~/components/EmptyState';
-import VariantForm from '~/components/flags/VariantForm';
+import VariantForm from '~/components/flags/variants/VariantForm';
 import Button from '~/components/forms/Button';
 import Modal from '~/components/Modal';
 import Slideover from '~/components/Slideover';
 import { deleteVariant } from '~/data/api';
 import { IFlag } from '~/types/Flag';
 import { IVariant } from '~/types/Variant';
-import { selectCurrentNamespace } from '../namespaces/namespacesSlice';
+import { selectCurrentNamespace } from '../../namespaces/namespacesSlice';
 
 type VariantsProps = {
   flag: IFlag;
