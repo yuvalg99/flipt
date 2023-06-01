@@ -1,5 +1,6 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
 import DeletePanel from '~/components/DeletePanel';
 import EmptyState from '~/components/EmptyState';
 import VariantForm from '~/components/flags/VariantForm';
@@ -7,9 +8,9 @@ import Button from '~/components/forms/Button';
 import Modal from '~/components/Modal';
 import Slideover from '~/components/Slideover';
 import { deleteVariant } from '~/data/api';
-import useNamespace from '~/data/hooks/namespace';
 import { IFlag } from '~/types/Flag';
 import { IVariant } from '~/types/Variant';
+import { selectCurrentNamespace } from '../namespaces/namespacesSlice';
 
 type VariantsProps = {
   flag: IFlag;
@@ -27,7 +28,7 @@ export default function Variants(props: VariantsProps) {
 
   const variantFormRef = useRef(null);
 
-  const { currentNamespace } = useNamespace();
+  const namespace = useSelector(selectCurrentNamespace);
 
   return (
     <>
@@ -65,11 +66,7 @@ export default function Variants(props: VariantsProps) {
           setOpen={setShowDeleteVariantModal}
           handleDelete={
             () =>
-              deleteVariant(
-                currentNamespace.key,
-                flag.key,
-                deletingVariant?.id ?? ''
-              ) // TODO: Determine impact of blank ID param
+              deleteVariant(namespace.key, flag.key, deletingVariant?.id ?? '') // TODO: Determine impact of blank ID param
           }
           onSuccess={() => {
             onFlagChange();
