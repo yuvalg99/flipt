@@ -362,11 +362,14 @@ func (s *Store) DeleteRule(ctx context.Context, r *flipt.DeleteRuleRequest) erro
 	}
 
 	// delete rule
-	//nolint
 	_, err = s.builder.Delete("rules").
 		RunWith(tx).
 		Where(sq.And{sq.Eq{"id": r.Id}, sq.Eq{"namespace_key": r.NamespaceKey}, sq.Eq{"flag_key": r.FlagKey}}).
 		ExecContext(ctx)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
 
 	// reorder existing rules after deletion
 	rows, err := s.builder.Select("id").
