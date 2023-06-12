@@ -1,16 +1,17 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import DeletePanel from '~/components/DeletePanel';
+import { selectReadonly } from '~/app/meta/metaSlice';
+import { selectCurrentNamespace } from '~/app/namespaces/namespacesSlice';
 import EmptyState from '~/components/EmptyState';
 import VariantForm from '~/components/flags/variants/VariantForm';
-import Button from '~/components/forms/Button';
+import Button from '~/components/forms/buttons/Button';
 import Modal from '~/components/Modal';
+import DeletePanel from '~/components/panels/DeletePanel';
 import Slideover from '~/components/Slideover';
 import { deleteVariant } from '~/data/api';
 import { IFlag } from '~/types/Flag';
 import { IVariant } from '~/types/Variant';
-import { selectCurrentNamespace } from '../../namespaces/namespacesSlice';
 
 type VariantsProps = {
   flag: IFlag;
@@ -29,6 +30,7 @@ export default function Variants(props: VariantsProps) {
   const variantFormRef = useRef(null);
 
   const namespace = useSelector(selectCurrentNamespace);
+  const readOnly = useSelector(selectReadonly);
 
   return (
     <>
@@ -90,6 +92,8 @@ export default function Variants(props: VariantsProps) {
               <Button
                 primary
                 type="button"
+                disabled={readOnly}
+                title={readOnly ? 'Not allowed in Read-Only mode' : undefined}
                 onClick={() => {
                   setEditingVariant(null);
                   setShowVariantForm(true);
@@ -146,31 +150,35 @@ export default function Variants(props: VariantsProps) {
                       {variant.description}
                     </td>
                     <td className="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                      <a
-                        href="#"
-                        className="pr-2 text-violet-600 hover:text-violet-900"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setEditingVariant(variant);
-                          setShowVariantForm(true);
-                        }}
-                      >
-                        Edit
-                        <span className="sr-only">,{variant.key}</span>
-                      </a>
-                      |
-                      <a
-                        href="#"
-                        className="pl-2 text-violet-600 hover:text-violet-900"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setDeletingVariant(variant);
-                          setShowDeleteVariantModal(true);
-                        }}
-                      >
-                        Delete
-                        <span className="sr-only">,{variant.key}</span>
-                      </a>
+                      {!readOnly && (
+                        <>
+                          <a
+                            href="#"
+                            className="pr-2 text-violet-600 hover:text-violet-900"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setEditingVariant(variant);
+                              setShowVariantForm(true);
+                            }}
+                          >
+                            Edit
+                            <span className="sr-only">,{variant.key}</span>
+                          </a>
+                          |
+                          <a
+                            href="#"
+                            className="pl-2 text-violet-600 hover:text-violet-900"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setDeletingVariant(variant);
+                              setShowDeleteVariantModal(true);
+                            }}
+                          >
+                            Delete
+                            <span className="sr-only">,{variant.key}</span>
+                          </a>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -179,6 +187,7 @@ export default function Variants(props: VariantsProps) {
           ) : (
             <EmptyState
               text="New Variant"
+              disabled={readOnly}
               onClick={() => {
                 setEditingVariant(null);
                 setShowVariantForm(true);

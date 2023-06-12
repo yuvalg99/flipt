@@ -1,20 +1,36 @@
-import { CalendarIcon } from '@heroicons/react/20/solid';
+import {
+  CalendarIcon,
+  DocumentDuplicateIcon,
+  TrashIcon
+} from '@heroicons/react/24/outline';
 import { formatDistanceToNowStrict, parseISO } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
-import { selectCurrentNamespace } from '~/app/namespaces/namespacesSlice';
-import DeletePanel from '~/components/DeletePanel';
+import { selectReadonly } from '~/app/meta/metaSlice';
+import {
+  selectCurrentNamespace,
+  selectNamespaces
+} from '~/app/namespaces/namespacesSlice';
 import EmptyState from '~/components/EmptyState';
-import Button from '~/components/forms/Button';
+import Button from '~/components/forms/buttons/Button';
+import Dropdown from '~/components/forms/Dropdown';
 import Loading from '~/components/Loading';
 import Modal from '~/components/Modal';
 import MoreInfo from '~/components/MoreInfo';
+import CopyToNamespacePanel from '~/components/panels/CopyToNamespacePanel';
+import DeletePanel from '~/components/panels/DeletePanel';
 import ConstraintForm from '~/components/segments/ConstraintForm';
 import SegmentForm from '~/components/segments/SegmentForm';
 import Slideover from '~/components/Slideover';
-import { deleteConstraint, deleteSegment, getSegment } from '~/data/api';
+import {
+  copySegment,
+  deleteConstraint,
+  deleteSegment,
+  getSegment
+} from '~/data/api';
 import { useError } from '~/data/hooks/error';
+import { useSuccess } from '~/data/hooks/success';
 import { useTimezone } from '~/data/hooks/timezone';
 import {
   ComparisonType,
@@ -40,11 +56,17 @@ export default function Segment() {
     useState<IConstraint | null>(null);
   const [showDeleteSegmentModal, setShowDeleteSegmentModal] =
     useState<boolean>(false);
+  const [showCopySegmentModal, setShowCopySegmentModal] =
+    useState<boolean>(false);
 
   const { setError, clearError } = useError();
+  const { setSuccess } = useSuccess();
+
   const navigate = useNavigate();
 
+  const namespaces = useSelector(selectNamespaces);
   const namespace = useSelector(selectCurrentNamespace);
+  const readOnly = useSelector(selectReadonly);
 
   const incrementSegmentVersion = () => {
     setSegmentVersion(segmentVersion + 1);
@@ -56,7 +78,6 @@ export default function Segment() {
     getSegment(namespace.key, segmentKey)
       .then((segment: ISegment) => {
         setSegment(segment);
-        clearError();
       })
       .catch((err) => {
         setError(err);
@@ -137,6 +158,32 @@ export default function Segment() {
         />
       </Modal>
 
+      {/* segment copy modal */}
+      <Modal open={showCopySegmentModal} setOpen={setShowCopySegmentModal}>
+        <CopyToNamespacePanel
+          panelMessage={
+            <>
+              Copy the segment{' '}
+              <span className="font-medium text-violet-500">{segment.key}</span>{' '}
+              to the namespace:
+            </>
+          }
+          panelType="Segment"
+          setOpen={setShowCopySegmentModal}
+          handleCopy={(namespaceKey: string) =>
+            copySegment(
+              { namespaceKey: namespace.key, key: segment.key },
+              { namespaceKey: namespaceKey, key: segment.key }
+            )
+          }
+          onSuccess={() => {
+            clearError();
+            setShowCopySegmentModal(false);
+            setSuccess('Successfully copied segment');
+          }}
+        />
+      </Modal>
+
       {/* segment header / delete button */}
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
@@ -160,15 +207,27 @@ export default function Segment() {
           </div>
         </div>
         <div className="flex flex-none">
-          <button
-            type="button"
-            className="mb-1 mt-5 inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium text-red-400 border-red-200 focus:outline-none enabled:hover:bg-red-50 sm:mt-0"
-            onClick={() => {
-              setShowDeleteSegmentModal(true);
-            }}
-          >
-            Delete
-          </button>
+          <Dropdown
+            label="Actions"
+            actions={[
+              {
+                id: 'copy',
+                label: 'Copy to Namespace',
+                disabled: readOnly || namespaces.length < 2,
+                onClick: () => setShowCopySegmentModal(true),
+                icon: DocumentDuplicateIcon
+              },
+              {
+                id: 'delete',
+                label: 'Delete',
+                disabled: readOnly,
+                onClick: () => setShowDeleteSegmentModal(true),
+                icon: TrashIcon,
+                activeClassName: readOnly ? 'text-red-500' : 'text-red-700',
+                inActiveClassName: readOnly ? 'text-red-400' : 'text-red-600'
+              }
+            ]}
+          />
         </div>
       </div>
 
@@ -216,6 +275,10 @@ export default function Segment() {
                   <Button
                     primary
                     type="button"
+                    disabled={readOnly}
+                    title={
+                      readOnly ? 'Not allowed in Read-Only mode' : undefined
+                    }
                     onClick={() => {
                       setEditingConstraint(null);
                       setShowConstraintForm(true);
@@ -292,35 +355,39 @@ export default function Segment() {
                           {constraint.description}
                         </td>
                         <td className="whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <a
-                            href="#"
-                            className="pr-2 text-violet-600 hover:text-violet-900"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setEditingConstraint(constraint);
-                              setShowConstraintForm(true);
-                            }}
-                          >
-                            Edit
-                            <span className="sr-only">
-                              , {constraint.property}
-                            </span>
-                          </a>
-                          |
-                          <a
-                            href="#"
-                            className="pl-2 text-violet-600 hover:text-violet-900"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setDeletingConstraint(constraint);
-                              setShowDeleteConstraintModal(true);
-                            }}
-                          >
-                            Delete
-                            <span className="sr-only">
-                              , {constraint.property}
-                            </span>
-                          </a>
+                          {!readOnly && (
+                            <>
+                              <a
+                                href="#"
+                                className="pr-2 text-violet-600 hover:text-violet-900"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setEditingConstraint(constraint);
+                                  setShowConstraintForm(true);
+                                }}
+                              >
+                                Edit
+                                <span className="sr-only">
+                                  , {constraint.property}
+                                </span>
+                              </a>
+                              <span aria-hidden="true"> | </span>
+                              <a
+                                href="#"
+                                className="pl-2 text-violet-600 hover:text-violet-900"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setDeletingConstraint(constraint);
+                                  setShowDeleteConstraintModal(true);
+                                }}
+                              >
+                                Delete
+                                <span className="sr-only">
+                                  , {constraint.property}
+                                </span>
+                              </a>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -329,6 +396,7 @@ export default function Segment() {
               ) : (
                 <EmptyState
                   text="New Constraint"
+                  disabled={readOnly}
                   onClick={() => {
                     setEditingConstraint(null);
                     setShowConstraintForm(true);

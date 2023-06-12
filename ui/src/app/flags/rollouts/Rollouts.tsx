@@ -1,16 +1,16 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import DeletePanel from '~/components/DeletePanel';
+import { selectCurrentNamespace } from '~/app/namespaces/namespacesSlice';
 import EmptyState from '~/components/EmptyState';
 import RolloutForm from '~/components/flags/rollouts/RolloutForm';
-import Button from '~/components/forms/Button';
+import Button from '~/components/forms/buttons/Button';
 import Modal from '~/components/Modal';
+import DeletePanel from '~/components/panels/DeletePanel';
 import Slideover from '~/components/Slideover';
 import { deleteRollout } from '~/data/api';
 import { IFlag } from '~/types/Flag';
 import { IRollout } from '~/types/Rollout';
-import { selectCurrentNamespace } from '../../namespaces/namespacesSlice';
 
 type RolloutsProps = {
   flag: IFlag;

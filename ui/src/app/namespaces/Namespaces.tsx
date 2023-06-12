@@ -1,12 +1,13 @@
 import { PlusIcon } from '@heroicons/react/24/outline';
 import { useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import DeletePanel from '~/components/DeletePanel';
+import { selectReadonly } from '~/app/meta/metaSlice';
 import EmptyState from '~/components/EmptyState';
-import Button from '~/components/forms/Button';
+import Button from '~/components/forms/buttons/Button';
 import Modal from '~/components/Modal';
 import NamespaceForm from '~/components/namespaces/NamespaceForm';
 import NamespaceTable from '~/components/namespaces/NamespaceTable';
+import DeletePanel from '~/components/panels/DeletePanel';
 import Slideover from '~/components/Slideover';
 import { useAppDispatch } from '~/data/hooks/store';
 import { INamespace } from '~/types/Namespace';
@@ -28,6 +29,8 @@ export default function Namespaces() {
   const dispatch = useAppDispatch();
 
   const namespaces = useSelector(selectNamespaces);
+  const readOnly = useSelector(selectReadonly);
+
   const namespaceFormRef = useRef(null);
 
   return (
@@ -66,8 +69,10 @@ export default function Namespaces() {
           }
           panelType="Namespace"
           setOpen={setShowDeleteNamespaceModal}
-          handleDelete={
-            () => dispatch(deleteNamespaceAsync(deletingNamespace?.key ?? '')) // TODO: Determine impact of blank ID param
+          handleDelete={() =>
+            dispatch(
+              deleteNamespaceAsync(deletingNamespace?.key ?? '')
+            ).unwrap()
           }
         />
       </Modal>
@@ -84,6 +89,8 @@ export default function Namespaces() {
           <div className="mt-4">
             <Button
               primary
+              disabled={readOnly}
+              title={readOnly ? 'Not allowed in Read-Only mode' : undefined}
               onClick={() => {
                 setEditingNamespace(null);
                 setShowNamespaceForm(true);
@@ -106,10 +113,12 @@ export default function Namespaces() {
               setShowEditNamespaceModal={setShowNamespaceForm}
               setDeletingNamespace={setDeletingNamespace}
               setShowDeleteNamespaceModal={setShowDeleteNamespaceModal}
+              readOnly={readOnly}
             />
           ) : (
             <EmptyState
               text="New Namespace"
+              disabled={readOnly}
               onClick={() => {
                 setEditingNamespace(null);
                 setShowNamespaceForm(true);

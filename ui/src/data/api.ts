@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-use-before-define */
 import { IAuthTokenBase } from 'types/auth/Token';
 import { IConstraintBase } from 'types/Constraint';
 import { IDistributionBase } from 'types/Distribution';
@@ -151,6 +152,24 @@ export async function updateFlag(
 
 export async function deleteFlag(namespaceKey: string, key: string) {
   return del(`/namespaces/${namespaceKey}/flags/${key}`);
+}
+
+export async function copyFlag(
+  from: { namespaceKey: string; key: string },
+  to: { namespaceKey: string; key?: string }
+) {
+  let flag = await get(`/namespaces/${from.namespaceKey}/flags/${from.key}`);
+  if (to.key) {
+    flag.key = to.key;
+  }
+
+  // first create the flag
+  await post(`/namespaces/${to.namespaceKey}/flags`, flag);
+
+  // then copy the variants
+  for (let variant of flag.variants) {
+    await createVariant(to.namespaceKey, flag.key, variant);
+  }
 }
 
 //
@@ -334,6 +353,26 @@ export async function deleteSegment(namespaceKey: string, key: string) {
   return del(`/namespaces/${namespaceKey}/segments/${key}`);
 }
 
+export async function copySegment(
+  from: { namespaceKey: string; key: string },
+  to: { namespaceKey: string; key?: string }
+) {
+  let segment = await get(
+    `/namespaces/${from.namespaceKey}/segments/${from.key}`
+  );
+  if (to.key) {
+    segment.key = to.key;
+  }
+
+  // first create the segment
+  await post(`/namespaces/${to.namespaceKey}/segments`, segment);
+
+  // then copy the constraints
+  for (let constraint of segment.constraints) {
+    await createConstraint(to.namespaceKey, segment.key, constraint);
+  }
+}
+
 //
 // constraints
 export async function createConstraint(
@@ -386,7 +425,7 @@ export async function evaluate(
 
 //
 // meta
-export async function getInfo() {
+async function getMeta(path: string) {
   const req = {
     method: 'GET',
     headers: {
@@ -395,7 +434,7 @@ export async function getInfo() {
     }
   };
 
-  const res = await fetch(`${metaURL}/info`, req);
+  const res = await fetch(`${metaURL}${path}`, req);
   if (!res.ok) {
     const contentType = res.headers.get('content-type');
 
@@ -414,4 +453,12 @@ export async function getInfo() {
   }
 
   return res.json();
+}
+
+export async function getInfo() {
+  return getMeta('/info');
+}
+
+export async function getConfig() {
+  return getMeta('/config');
 }

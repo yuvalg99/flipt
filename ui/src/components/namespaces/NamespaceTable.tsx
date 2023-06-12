@@ -48,7 +48,10 @@ type NamespaceDeleteActionProps = {
 function NamespaceDeleteAction(props: NamespaceDeleteActionProps) {
   const { row, setDeletingNamespace, setShowDeleteNamespaceModal } = props;
   return row.original.protected ? (
-    <span className="text-gray-400">
+    <span
+      title="Cannot deleting the default namespace"
+      className="text-gray-400 hover:cursor-not-allowed"
+    >
       Delete
       <span className="sr-only">, {row.original.name}</span>
     </span>
@@ -74,6 +77,7 @@ type NamespaceTableProps = {
   setShowEditNamespaceModal: (show: boolean) => void;
   setDeletingNamespace: (namespace: INamespace) => void;
   setShowDeleteNamespaceModal: (show: boolean) => void;
+  readOnly?: boolean;
 };
 
 export default function NamespaceTable(props: NamespaceTableProps) {
@@ -82,7 +86,8 @@ export default function NamespaceTable(props: NamespaceTableProps) {
     setEditingNamespace,
     setShowEditNamespaceModal,
     setDeletingNamespace,
-    setShowDeleteNamespaceModal
+    setShowDeleteNamespaceModal,
+    readOnly = false
   } = props;
 
   const searchThreshold = 10;
@@ -104,14 +109,19 @@ export default function NamespaceTable(props: NamespaceTableProps) {
     }),
     columnHelper.accessor('name', {
       header: 'Name',
-      cell: (info) => (
-        <NamespaceEditAction
-          // eslint-disable-next-line react/prop-types
-          cell={info}
-          setEditingNamespace={setEditingNamespace}
-          setShowEditNamespaceModal={setShowEditNamespaceModal}
-        />
-      ),
+      cell: (info) => {
+        if (readOnly) {
+          return info.getValue();
+        }
+        return (
+          <NamespaceEditAction
+            // eslint-disable-next-line react/prop-types
+            cell={info}
+            setEditingNamespace={setEditingNamespace}
+            setShowEditNamespaceModal={setShowEditNamespaceModal}
+          />
+        );
+      },
       meta: {
         className:
           'truncate whitespace-nowrap px-3 py-4 text-sm font-medium text-gray-500'
@@ -152,14 +162,18 @@ export default function NamespaceTable(props: NamespaceTableProps) {
     ),
     columnHelper.display({
       id: 'actions',
-      cell: (props) => (
-        <NamespaceDeleteAction
-          // eslint-disable-next-line react/prop-types
-          row={props.row}
-          setDeletingNamespace={setDeletingNamespace}
-          setShowDeleteNamespaceModal={setShowDeleteNamespaceModal}
-        />
-      ),
+      cell: (props) => {
+        if (!readOnly) {
+          return (
+            <NamespaceDeleteAction
+              // eslint-disable-next-line react/prop-types
+              row={props.row}
+              setDeletingNamespace={setDeletingNamespace}
+              setShowDeleteNamespaceModal={setShowDeleteNamespaceModal}
+            />
+          );
+        }
+      },
       meta: {
         className:
           'whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6'

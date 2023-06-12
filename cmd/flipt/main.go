@@ -172,6 +172,10 @@ func determinePath(cfgPath string) string {
 	}
 
 	_, err := os.Stat(fliptConfigFile)
+	if err == nil {
+		return fliptConfigFile
+	}
+
 	if !errors.Is(err, fs.ErrNotExist) {
 		defaultLogger.Warn("unexpected error checking configuration path", zap.String("config_path", fliptConfigFile), zap.Error(err))
 	}
@@ -322,19 +326,7 @@ func run(ctx context.Context, logger *zap.Logger, cfg *config.Config) error {
 		})
 	}
 
-	migrator, err := sql.NewMigrator(*cfg, logger)
-	if err != nil {
-		return err
-	}
-
-	if err := migrator.Up(forceMigrate); err != nil {
-		migrator.Close()
-		return err
-	}
-
-	migrator.Close()
-
-	grpcServer, err := cmd.NewGRPCServer(ctx, logger, cfg, info)
+	grpcServer, err := cmd.NewGRPCServer(ctx, logger, cfg, info, forceMigrate)
 	if err != nil {
 		return err
 	}
